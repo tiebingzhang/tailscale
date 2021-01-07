@@ -288,13 +288,15 @@ Returns the updated ACL in JSON or HuJSON according to the `Accept` header on su
 `Accept` - Sets the return type of the updated ACL. Response is parsed `JSON` if `application/json` is explicitly named, otherwise HuJSON will be returned.
 
 ###### POST Body
-ACL JSON or HuJSON (see https://tailscale.com/kb/1018/acls for more details).
+The POST body should be a JSON or [HuJSON](https://github.com/tailscale/hujson#hujson---human-json) formatted JSON object. An ACL policy may contain the following top-level properties:
+
 `Groups` - Static groups of users which can be used for ACL rules.
 `Hosts` - Hostname aliases to use in place of IP addresses or subnets.
 `ACLs` - Access control lists.
 `TagOwners` - Defines who is allowed to use which tags.
 `Tests` - Run on ACL updates to check correct functionality of defined ACLs.
 
+See https://tailscale.com/kb/1018/acls for more information on those properties.
 
 ##### Example
 ```
@@ -347,6 +349,21 @@ Response
     // to define specific ACL restrictions.
     { "Action": "accept", "Users": ["*"], "Ports": ["*:*"] },
   ]
+}
+```
+
+Failed test error response
+```
+{
+    "message": "test(s) failed",
+    "data": [
+        {
+            "user": "user1@example.com",
+            "errors": [
+                "address \"user2@example.com:400\": want: Accept, got: Drop"
+            ]
+        }
+    ]
 }
 ```
 
