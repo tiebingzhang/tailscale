@@ -274,10 +274,11 @@ Etag: "e0b2816b418b3f266309d94426ac7668ab3c1fa87798785bf82f1085cc2f6d9c"
 
 #### `POST /api/v2/domain/:domain/acl` - set ACL for a domain
 
-Sets the ACL for the given domain. HuJSON and JSON are both accepted inputs. An `If-Match` header can be set to avoid missed updates.
+Sets the ACL for the given domain.
+HuJSON and JSON are both accepted inputs.
+An `If-Match` header can be set to avoid missed updates.
 
-Returns error for invalid ACLs.
-Returns error if using an `If-Match` header and the ETag does not match.
+Returns the updated ACL in JSON or HuJSON according to the `Accept` header on success. Otherwise, errors are returned for incorrectly defined ACLs, ACLs with failing tests on attempted updates, and mismatched `If-Match` header and ETag.
 
 ##### Parameters
 
@@ -287,7 +288,13 @@ Returns error if using an `If-Match` header and the ETag does not match.
 `Accept` - Sets the return type of the updated ACL. Response is parsed `JSON` if `application/json` is explicitly named, otherwise HuJSON will be returned.
 
 ###### POST Body
-ACL JSON or HuJSON (see https://tailscale.com/kb/1018/acls)
+ACL JSON or HuJSON (see https://tailscale.com/kb/1018/acls for more details).
+`Groups` - Static groups of users which can be used for ACL rules.
+`Hosts` - Hostname aliases to use in place of IP addresses or subnets.
+`ACLs` - Access control lists.
+`TagOwners` - Defines who is allowed to use which tags.
+`Tests` - Run on ACL updates to check correct functionality of defined ACLs.
+
 
 ##### Example
 ```
