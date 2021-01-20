@@ -1851,7 +1851,7 @@ func (c *Conn) handleDiscoMessage(msg []byte, src netaddr.IPPort) bool {
 		}
 		if de != nil {
 			c.logf("magicsock: disco: %v<-%v (%v, %v)  got call-me-maybe", c.discoShort, de.discoShort, de.publicKey.ShortString(), derpStr(src.String()))
-			go de.handleCallMeMaybe()
+			go de.handleCallMeMaybe(dm)
 		}
 	}
 
@@ -1880,6 +1880,27 @@ func (c *Conn) handlePingLocked(dm *disco.Ping, de *discoEndpoint, src netaddr.I
 		TxID: dm.TxID,
 		Src:  src,
 	}, discoVerboseLog)
+}
+
+// enqueueCallMeMaybe schedules a send of disco.CallMeMaybe to de via derpAddr
+// once we know that our STUN endpoint is fresh.
+//
+// derpAddr is de.derpAddr at the time of send. It's assumed the peer won't be
+// flipping primary DERPs in the 0-30ms it takes to confirm our STUN endpoint.
+func (c *Conn) enqueueCallMeMaybe(derpAddr netaddr.IPPort, de *discoEndpoint) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// TODO(bradfitz): do a fast/lite re-STUN if our STUN info is too old
+	// If it's too old, enqueue.
+
+	eps := make([]netaddr.IPPort, 0, len(c.lastEndpoints))
+	for _, ep := range c.lastEndpoints {
+		if ipp, err := netaddr.ParseIPPort(ep); err == nil {
+			eps = append(eps, ipp)
+		}
+	}
+	go de.sendDiscoMessage(derpAddr, &disco.CallMeMaybe{MyNumber: eps}, discoLog)
 }
 
 // setAddrToDiscoLocked records that newk is at src.
@@ -3236,13 +3257,12 @@ func (de *discoEndpoint) sendPingsLocked(now time.Time, sendCallMeMaybe bool) {
 	}
 	derpAddr := de.derpAddr
 	if sentAny && sendCallMeMaybe && !derpAddr.IsZero() {
-		// In just a bit of a time (for goroutines above to schedule and run),
-		// send a message to peer via DERP informing them that we've sent
-		// so our firewall ports are probably open and now would be a good time
-		// for them to connect.
-		time.AfterFunc(5*time.Millisecond, func() {
-			de.sendDiscoMessage(derpAddr, &disco.CallMeMaybe{}, discoLog)
-		})
+		// Have our magicsock.Conn figure out its STUN endpoint (if
+		// it doesn't know already) and then send a CallMeMaybe
+		// message to our peer via DERP informing them that we've
+		// sent so our firewall ports are probably open and now
+		// would be a good time for them to connect.
+		go de.c.enqueueCallMeMaybe(derpAddr, de)
 	}
 }
 
@@ -3424,9 +3444,11 @@ func (st *endpointState) addPongReplyLocked(r pongReply) {
 // DERP. The contract for use of this message is that the peer has
 // already sent to us via UDP, so their stateful firewall should be
 // open. Now we can Ping back and make it through.
-func (de *discoEndpoint) handleCallMeMaybe() {
+func (de *discoEndpoint) handleCallMeMaybe(m *disco.CallMeMaybe) {
 	de.mu.Lock()
 	defer de.mu.Unlock()
+
+	// TODO(bradfitz): use d.MyNumbers if any endpoints are unknown
 
 	// Zero out all the lastPing times to force sendPingsLocked to send new ones,
 	// even if it's been less than 5 seconds ago.
